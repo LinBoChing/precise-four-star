@@ -179,6 +179,30 @@ B組
     }
     return s;
   }
+  function headBucket(n){
+    if(n <= 9) return 0;
+    if(n <= 19) return 1;
+    if(n <= 29) return 2;
+    if(n <= 39) return 3;
+    return 4;
+  }
+  function balanceScore(chosen){
+    // 讓號碼看起來自然：優先平均分散在 0/1/2/3/4 頭，避免集中某一頭。
+    const buckets = [0,0,0,0,0];
+    for(const n of chosen) buckets[headBucket(n)]++;
+    const activeBuckets = buckets.filter(v=>v>0).length;
+    const maxBucket = Math.max(...buckets);
+    const minActive = Math.min(...buckets.filter(v=>v>0));
+    const spread = Math.max(...chosen) - Math.min(...chosen);
+    const avg = chosen.reduce((t,n)=>t+n,0) / chosen.length;
+    const idealAvg = Math.max(...chosen) > 39 ? 25 : 20;
+    let penalty = 0;
+    for(const b of buckets){
+      if(b >= 3) penalty += (b - 2) * 260;
+      if(chosen.length <= 5 && b >= 2) penalty += (b - 1) * 55;
+    }
+    return activeBuckets * 220 - penalty - (maxBucket - minActive) * 90 + spread * 1.2 - Math.abs(avg - idealAvg) * 3;
+  }
   function planScore(chosen, audit, groups){
     let score = 0;
     for(const a of audit){
@@ -190,7 +214,7 @@ B組
       score += Math.min(a.h3.length,3) * 14;
     }
     score += chosen.reduce((t,n)=>t+numberScore(n,groups),0);
-    score += (Math.max(...chosen) - Math.min(...chosen)) * 0.01;
+    score += balanceScore(chosen);
     return score;
   }
 
@@ -222,7 +246,6 @@ B組
         const audit = testPlan(chosen, groups);
         if(audit.every(a=>a.pass)){
           valid.push({chosen, audit, score:planScore(chosen,audit,groups)});
-          if(valid.length >= limitValid) return false;
         }else if(near.length < 80){
           const passed = audit.filter(a=>a.pass).length;
           near.push({chosen, audit, score:passed*1000 + chosen.reduce((t,n)=>t+numberScore(n,groups),0), fallback:true});
@@ -231,7 +254,7 @@ B組
       });
     }else{
       // 7～10 支時組合量太大，改用有序回溯；仍不使用亂數。
-      const ordered = [...pool].sort((a,b)=>numberScore(b,groups)-numberScore(a,groups) || a-b);
+      const ordered = [...pool].sort((a,b)=>numberScore(b,groups)-numberScore(a,groups) || Math.abs(a-(maxBall>39?25:20))-Math.abs(b-(maxBall>39?25:20)) || a-b);
       const picked = [];
       function dfs(idx){
         if(valid.length >= limitValid) return false;
